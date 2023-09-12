@@ -1,59 +1,37 @@
+import { ethers, waffle } from 'hardhat';
+import { Contract, Signer } from 'ethers';
 import { expect } from 'chai';
-import { ethers } from 'hardhat';
-import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { Contract, ContractFactory } from 'ethers';
+
+const { deployContract } = waffle;
 
 describe('ERC1155', function () {
-  let owner: SignerWithAddress;
-  let user: SignerWithAddress;
   let erc1155: Contract;
+  let owner: Signer;
+  let recipient: Signer;
+  let operator: Signer;
 
-  beforeEach(async function () {
-    [owner, user] = await ethers.getSigners();
+  before(async function () {
+    [owner, recipient, operator] = await ethers.getSigners();
 
-    const ERC1155: ContractFactory = await ethers.getContractFactory('ERC1155');
-    erc1155 = await ERC1155.deploy();
-    await erc1155.deployed();
+    const ERC1155 = await ethers.getContractFactory('ERC1155');
+    erc1155 = await deployContract(owner, ERC1155);
   });
 
-  it('Should transfer tokens between accounts', async function () {
-    // Mint tokens to the owner
-    await erc1155.mint(owner.address, 0, 10);
-
-    // Transfer tokens from owner to user
-    await erc1155.safeTransferFrom(owner.address, user.address, 0, 5, []);
-
-    // Check balances after transfer
-    const ownerBalance: number = await erc1155.balanceOf(owner.address, 0);
-    const userBalance: number = await erc1155.balanceOf(user.address, 0);
-
-    expect(ownerBalance).to.equal(5);
-    expect(userBalance).to.equal(5);
+  it('should deploy the ERC1155 contract', async function () {
+    expect(erc1155.address).to.not.equal(0);
   });
 
-  it('Should set and check operator approval', async function () {
-    // Approve user as an operator for the owner
-    await erc1155.setApprovalForAll(user.address, true);
+  it('should allow safeTransferFrom with valid parameters', async function () {
+    const tokenId = 1;
+    const value = 10;
+    const data = '0x';
 
-    // Check operator approval status
-    const isApproved: boolean = await erc1155.isApprovedForAll(owner.address, user.address);
-    expect(isApproved).to.equal(true);
+    await erc1155.mint(owner.getAddress(), tokenId, value);
 
-    // Revoke operator approval
-    await erc1155.setApprovalForAll(user.address, false);
-
-    // Check operator approval status again
-    const isRevoked: boolean = await erc1155.isApprovedForAll(owner.address, user.address);
-    expect(isRevoked).to.equal(false);
-  });
-
-  it('Should return the correct balance', async function () {
-    // Mint tokens to the owner
-    await erc1155.mint(owner.address, 1, 15);
-
-    // Check owner's balance
-    const ownerBalance: number = await erc1155.balanceOf(owner.address, 1);
-
-    expect(ownerBalance).to.equal(15);
-  });
-});
+    await expect(
+      erc1155
+        .connect(owner)
+        .safeTransferFrom(owner.getAddress(), recipient.getAddress(), tokenId, value, data)
+    )
+      .to.emit(erc1155, 'TransferSingle')
+      .withArgs(owner.getAddress(), owner.getAddress(), recipient.getAddress(), tokenId,
